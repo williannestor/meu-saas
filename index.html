@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ConectaZap CRM</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="login-screen" id="loginScreen">
+      <form class="login-card" id="loginForm">
+        <div class="brand login-brand">
+          <div class="brand-mark">AG</div>
+          <div>
+            <strong>Agcapy</strong>
+            <span>Automacoes Inteligentes</span>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow">Acesso ao CRM</p>
+          <h1>Entre para gerenciar prospeccao e WhatsApp</h1>
+        </div>
+        <label>
+          E-mail
+          <input id="loginEmail" name="email" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          Senha
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="primary-button full" type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">CZ</div>
+          <div>
+            <strong>ConectaZap</strong>
+            <span>Evolution API + CRM</span>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Principal">
+          <button class="nav-item is-active" data-view="inbox" type="button">
+            <span class="nav-icon">I</span>
+            Inbox
+          </button>
+          <button class="nav-item" data-view="pipeline" type="button">
+            <span class="nav-icon">P</span>
+            Pipeline
+          </button>
+          <button class="nav-item" data-view="automations" type="button">
+            <span class="nav-icon">A</span>
+            Automações
+          </button>
+          <button class="nav-item" data-view="settings" type="button">
+            <span class="nav-icon">C</span>
+            Conexão
+          </button>
+        </nav>
+
+        <div class="plan-card">
+          <span>Plano Growth</span>
+          <strong>1.284 mensagens/mês</strong>
+          <div class="progress"><i style="width: 64%"></i></div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Central de atendimento</p>
+            <h1>WhatsApp conectado ao CRM comercial</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" id="seedReset" type="button">Restaurar demo</button>
+            <button class="ghost-button" id="logoutButton" type="button">Sair</button>
+            <button class="primary-button" id="newLeadButton" type="button">Novo lead</button>
+          </div>
+        </header>
+
+        <section class="metrics" aria-label="Métricas">
+          <article>
+            <span>Conversas abertas</span>
+            <strong id="metricOpen">0</strong>
+            <small>Fila de atendimento</small>
+          </article>
+          <article>
+            <span>Leads no CRM</span>
+            <strong id="metricLeads">0</strong>
+            <small>Sincronizados</small>
+          </article>
+          <article>
+            <span>Status Evolution</span>
+            <strong id="metricConnection">Demo</strong>
+            <small id="metricInstance">Sem instância</small>
+          </article>
+          <article>
+            <span>Receita potencial</span>
+            <strong id="metricRevenue">R$ 0</strong>
+            <small>Pipeline ativo</small>
+          </article>
+        </section>
+
+        <section class="view is-visible" id="view-inbox">
+          <div class="inbox-layout">
+            <section class="conversation-list" aria-label="Conversas">
+              <div class="section-head">
+                <div>
+                  <h2>Conversas</h2>
+                  <span id="queueCount">0 na fila</span>
+                </div>
+                <select id="ownerFilter" aria-label="Filtrar por responsável">
+                  <option value="all">Todos</option>
+                  <option value="Ana">Ana</option>
+                  <option value="Bruno">Bruno</option>
+                  <option value="Carla">Carla</option>
+                </select>
+              </div>
+              <div class="search-box">
+                <input id="conversationSearch" type="search" placeholder="Buscar contato, empresa ou tag" />
+              </div>
+              <div class="conversation-items" id="conversationItems"></div>
+            </section>
+
+            <section class="chat-panel" aria-label="Atendimento">
+              <div class="chat-header" id="chatHeader"></div>
+              <div class="messages" id="messages"></div>
+              <form class="reply-box" id="replyForm">
+                <textarea id="replyInput" rows="3" placeholder="Escreva uma resposta pelo WhatsApp"></textarea>
+                <div class="reply-actions">
+                  <button class="ghost-button" type="button" id="simulateInboundButton">Simular recebimento</button>
+                  <button class="ghost-button" type="button" id="templateButton">Usar modelo</button>
+                  <button class="primary-button" type="submit">Enviar</button>
+                </div>
+              </form>
+            </section>
+
+            <aside class="lead-panel" aria-label="Ficha do lead">
+              <div class="section-head compact">
+                <div>
+                  <h2>Ficha CRM</h2>
+                  <span>Atualização instantânea</span>
+                </div>
+              </div>
+              <form id="leadForm" class="lead-form">
+                <label>
+                  Nome
+                  <input id="leadName" name="name" required />
+                </label>
+                <label>
+                  Empresa
+                  <input id="leadCompany" name="company" />
+                </label>
+                <label>
+                  Telefone
+                  <input id="leadPhone" name="phone" />
+                </label>
+                <label>
+                  Etapa
+                  <select id="leadStage" name="stage">
+                    <option>Entrada</option>
+                    <option>Qualificação</option>
+                    <option>Proposta</option>
+                    <option>Fechamento</option>
+                  </select>
+                </label>
+                <label>
+                  Valor potencial
+                  <input id="leadValue" name="value" type="number" min="0" step="100" />
+                </label>
+                <label>
+                  Responsável
+                  <select id="leadOwner" name="owner">
+                    <option>Ana</option>
+                    <option>Bruno</option>
+                    <option>Carla</option>
+                  </select>
+                </label>
+                <label>
+                  Observações
+                  <textarea id="leadNotes" name="notes" rows="5"></textarea>
+                </label>
+                <button class="primary-button full" type="submit">Salvar no CRM</button>
+              </form>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-pipeline">
+          <div class="pipeline-board" id="pipelineBoard"></div>
+        </section>
+
+        <section class="view" id="view-automations">
+          <div class="automation-grid">
+            <article class="automation-card">
+              <div>
+                <span class="status-dot is-on"></span>
+                <h2>Boas-vindas para novo lead</h2>
+              </div>
+              <p>Quando a Evolution API envia uma mensagem nova, cria o lead e responde com triagem inicial.</p>
+              <button class="ghost-button" type="button" data-automation="welcome">Simular</button>
+            </article>
+            <article class="automation-card">
+              <div>
+                <span class="status-dot is-on"></span>
+                <h2>Sem resposta há 24h</h2>
+              </div>
+              <p>Cria tarefa de follow-up, sobe a prioridade e avisa o responsável pelo lead.</p>
+              <button class="ghost-button" type="button" data-automation="followup">Simular</button>
+            </article>
+            <article class="automation-card">
+              <div>
+                <span class="status-dot"></span>
+                <h2>Proposta enviada</h2>
+              </div>
+              <p>Ao detectar proposta, move a oportunidade e registra valor no CRM.</p>
+              <button class="ghost-button" type="button" data-automation="proposal">Ativar</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-settings">
+          <div class="settings-layout">
+            <section>
+              <h2>Integração Evolution API</h2>
+              <p>Cadastre a URL da sua Evolution API, a instância do WhatsApp e a chave de API. Em produção, esses dados devem ficar no backend.</p>
+              <form class="settings-form" id="settingsForm">
+                <label>
+                  URL base da Evolution API
+                  <input id="apiBaseUrl" placeholder="https://evolution.seudominio.com" />
+                </label>
+                <label>
+                  Instância
+                  <input id="apiInstance" placeholder="comercial-principal" />
+                </label>
+                <label>
+                  API key
+                  <input id="apiKey" placeholder="apikey_xxx" type="password" />
+                </label>
+                <label>
+                  Webhook público do SaaS
+                  <input id="webhookUrl" placeholder="https://app.seudominio.com/api/webhooks/evolution" />
+                </label>
+                <div class="reply-actions">
+                  <button class="primary-button" type="submit">Salvar conexão</button>
+                  <button class="ghost-button" id="copyPayloadButton" type="button">Copiar payload</button>
+                </div>
+              </form>
+            </section>
+            <section>
+              <h2>Contrato técnico</h2>
+              <div class="code-card">
+                <span>Webhook de entrada</span>
+                <code>POST /api/webhooks/evolution</code>
+              </div>
+              <div class="code-card">
+                <span>Envio de mensagem</span>
+                <code id="sendEndpoint">POST /message/sendText/{instance}</code>
+              </div>
+              <div class="code-card">
+                <span>Fluxo</span>
+                <code>MESSAGES_UPSERT -> contact.sync -> lead.upsert -> crm.timeline.add</code>
+              </div>
+              <div class="field-list">
+                <span>Contato</span>
+                <span>Empresa</span>
+                <span>Telefone</span>
+                <span>Etapa</span>
+                <span>Valor</span>
+                <span>Responsável</span>
+                <span>Tags</span>
+                <span>Histórico</span>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

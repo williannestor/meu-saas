@@ -1,0 +1,9 @@
+{
+  "name": "conectazap-crm",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Micro SaaS de atendimento WhatsApp com Evolution API, CRM e endpoints para n8n.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
