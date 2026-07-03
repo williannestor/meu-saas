@@ -6,6 +6,13 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    environment:
+      CONTAINER_MODE: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      evolution-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1))"]
       interval: 10s
@@ -34,8 +41,30 @@ services:
     networks:
       - meiuss
 
+  evolution-api:
+    image: evolutionapi/evolution-api:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - STORAGE_TYPE=sqlite
+      - DATABASE_URL=file:/data/evolution.db
+      - AUTHENTICATION_KEY=${EVOLUTION_API_KEY:-change-me}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-change-me}
+    volumes:
+      - evolution_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - meiuss
+
 volumes:
   db_data:
+  evolution_data:
 
 networks:
   meiuss:

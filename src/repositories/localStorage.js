@@ -1,12 +1,13 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const config = require("../config");
 
 const dataDir = path.join(__dirname, "..", "data");
 const dbPath = path.join(dataDir, "crm-db.json");
 
 const defaultDb = {
-  settings: { apiBaseUrl: "", instance: "", webhookUrl: "" },
+  settings: { apiBaseUrl: config.evolutionApiUrl, instance: config.evolutionInstance, webhookUrl: "" },
   users: [],
   leads: []
 };
@@ -56,7 +57,7 @@ async function upsertLead(workspaceId, lead) {
       ...target,
       id: target.id || crypto.randomUUID(),
       stage: target.stage || "Entrada",
-      owner: target.owner || "Agcapy",
+      owner: target.owner || config.appName,
       tags: Array.isArray(target.tags) ? target.tags : ["prospeccao"],
       priority: target.priority || "Media",
       source: target.source || "n8n Scraper",

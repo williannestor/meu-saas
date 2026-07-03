@@ -8,8 +8,8 @@ const ALLOWED_ORIGINS = isProd
 
 function workspaceIdFrom(req) {
   const header = req.headers["x-workspace-id"];
-  if (header && typeof header === "string") return header.trim();
-  return null;
+  if (header && typeof header === "string" && header.trim()) return header.trim();
+  return "default";
 }
 
 function isOriginAllowed(origin) {
