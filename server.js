@@ -630,16 +630,14 @@ async function serveStatic(req, res, url) {
 }
 
 const server = http.createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    if (url.pathname.startsWith("/api/")) return await routeApi(req, res, url);
-    return await serveStatic(req, res, url);
-  } catch (error) {
-    const headers = originHeaders({ headers: { origin: req.headers.origin } });
-    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
-    sendJson(res, 500, { error: error.message });
-  }
+  await logger(req, res, async () => tryRoute(req, res));
 });
+
+async function tryRoute(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname.startsWith("/api/")) return await routeApi(req, res, url);
+  return await serveStatic(req, res, url);
+}
 
 async function start() {
   await ensureAdminUser();

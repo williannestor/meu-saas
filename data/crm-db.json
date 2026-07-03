@@ -1,0 +1,20 @@
+{
+  "settings": {
+    "apiBaseUrl": "https://evolution.meus-arquivos.local",
+    "instance": "MEUS-ARQUIVOS",
+    "webhookUrl": "http://localhost:3000/api/webhooks/evolution"
+  },
+  "users": [
+    {
+      "id": "f6d5f668-0a89-4bb8-8e48-e01bd2b7ca59",
+      "email": "admin@meus-arquivos.local",
+      "name": "Admin",
+      "role": "admin",
+      "passwordSalt": "70ea74bc78a007c1261cd85cc1cb47d6",
+      "passwordHash": "e12a12ba3c5d31593b48e0fa8498fe5b26ff1c7cfe8ac7c3552df5e662d035f6",
+      "workspaceId": "default",
+      "createdAt": "2026-07-03T04:38:04.429Z"
+    }
+  ],
+  "leads": []
+}
