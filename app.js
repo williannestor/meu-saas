@@ -314,26 +314,53 @@ function renderMetrics() {
 
 function renderConversationList() {
   const list = filteredConversations();
-  dom.conversationItems.innerHTML = "";
+  dom.conversationItems.textContent = "";
 
   list.forEach((conversation) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `conversation-item ${conversation.id === state.selectedId ? "is-active" : ""}`;
     button.dataset.id = conversation.id;
-    button.innerHTML = `
-      <div class="conversation-row">
-        <strong>${escapeHtml(conversation.name)}</strong>
-        <span class="conversation-meta">${escapeHtml(conversation.lastSeen)}</span>
-      </div>
-      <span class="conversation-meta">${escapeHtml(conversation.company)} · ${escapeHtml(conversation.owner)}</span>
-      <div class="badge-row">
-        <span class="badge ${conversation.priority === "Alta" ? "hot" : ""}">${escapeHtml(conversation.priority)}</span>
-        <span class="badge">${escapeHtml(conversation.stage)}</span>
-        <span class="badge source">${escapeHtml(conversation.source || "Manual")}</span>
-        ${conversation.tags.map((tag) => `<span class="badge">${escapeHtml(tag)}</span>`).join("")}
-      </div>
-    `;
+
+    const row = document.createElement("div");
+    row.className = "conversation-row";
+    const title = document.createElement("strong");
+    title.textContent = conversation.name;
+    const time = document.createElement("span");
+    time.className = "conversation-meta";
+    time.textContent = conversation.lastSeen;
+    row.append(title, time);
+    button.append(row);
+
+    const sub = document.createElement("span");
+    sub.className = "conversation-meta";
+    sub.textContent = `${conversation.company} · ${conversation.owner}`;
+    button.append(sub);
+
+    const badges = document.createElement("div");
+    badges.className = "badge-row";
+
+    const priority = document.createElement("span");
+    priority.className = `badge ${conversation.priority === "Alta" ? "hot" : ""}`;
+    priority.textContent = conversation.priority;
+
+    const stage = document.createElement("span");
+    stage.className = "badge";
+    stage.textContent = conversation.stage;
+
+    const source = document.createElement("span");
+    source.className = "badge source";
+    source.textContent = conversation.source || "Manual";
+
+    badges.append(priority, stage, source);
+    (conversation.tags || []).forEach((tag) => {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = tag;
+      badges.append(badge);
+    });
+
+    button.append(badges);
     dom.conversationItems.append(button);
   });
 }
@@ -342,22 +369,39 @@ function renderChat() {
   const lead = selectedLead();
   if (!lead) return;
 
-  dom.chatHeader.innerHTML = `
-    <div class="chat-contact">
-      <div class="avatar">${escapeHtml(initials(lead.name))}</div>
-      <div>
-        <h2>${escapeHtml(lead.name)}</h2>
-        <span class="conversation-meta">${escapeHtml(lead.phone)} · ${escapeHtml(lead.company)}</span>
-      </div>
-    </div>
-    <span class="badge ${lead.priority === "Alta" ? "hot" : ""}">${escapeHtml(lead.stage)}</span>
-  `;
+  dom.chatHeader.textContent = "";
 
-  dom.messages.innerHTML = "";
+  const contact = document.createElement("div");
+  contact.className = "chat-contact";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.textContent = initials(lead.name);
+
+  const info = document.createElement("div");
+  const title = document.createElement("h2");
+  title.textContent = lead.name;
+  const sub = document.createElement("span");
+  sub.className = "conversation-meta";
+  sub.textContent = `${lead.phone} · ${lead.company}`;
+  info.append(title, sub);
+
+  contact.append(avatar, info);
+  dom.chatHeader.append(contact);
+
+  const stage = document.createElement("span");
+  stage.className = `badge ${lead.priority === "Alta" ? "hot" : ""}`;
+  stage.textContent = lead.stage;
+  dom.chatHeader.append(stage);
+
+  dom.messages.textContent = "";
   lead.messages.forEach((message) => {
     const bubble = document.createElement("div");
     bubble.className = `message ${message.from === "agent" ? "out" : "in"}`;
-    bubble.innerHTML = `${escapeHtml(message.text)}<small>${escapeHtml(message.time)}</small>`;
+    bubble.textContent = message.text;
+    const time = document.createElement("small");
+    time.textContent = message.time;
+    bubble.append(time);
     dom.messages.append(bubble);
   });
   dom.messages.scrollTop = dom.messages.scrollHeight;
@@ -377,30 +421,42 @@ function renderLeadForm() {
 }
 
 function renderPipeline() {
-  dom.pipelineBoard.innerHTML = "";
+  dom.pipelineBoard.textContent = "";
 
   stages.forEach((stage) => {
     const leads = state.conversations.filter((item) => item.stage === stage);
     const column = document.createElement("section");
     column.className = "pipeline-column";
-    column.innerHTML = `
-      <header>
-        <h2>${escapeHtml(stage)}</h2>
-        <span>${leads.length} leads</span>
-      </header>
-    `;
+
+    const header = document.createElement("header");
+    const title = document.createElement("h2");
+    title.textContent = stage;
+    const count = document.createElement("span");
+    count.textContent = `${leads.length} leads`;
+    header.append(title, count);
+    column.append(header);
 
     leads.forEach((lead) => {
       const card = document.createElement("article");
       card.className = "lead-card";
-      card.innerHTML = `
-        <div>
-          <strong>${escapeHtml(lead.name)}</strong>
-          <small>${escapeHtml(lead.company)} · ${escapeHtml(lead.owner)}</small>
-        </div>
-        <span>${money(lead.value)}</span>
-        <button class="ghost-button" type="button" data-open-lead="${lead.id}">Abrir</button>
-      `;
+
+      const info = document.createElement("div");
+      const name = document.createElement("strong");
+      name.textContent = lead.name;
+      const sub = document.createElement("small");
+      sub.textContent = `${lead.company} · ${lead.owner}`;
+      info.append(name, sub);
+
+      const value = document.createElement("span");
+      value.textContent = money(lead.value);
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost-button";
+      button.dataset.openLead = lead.id;
+      button.textContent = "Abrir";
+
+      card.append(info, value, button);
       column.append(card);
     });
 
@@ -451,10 +507,12 @@ function nowTime() {
 }
 
 function buildEvolutionPayload(text, lead = selectedLead()) {
+  const settings = state.settings || {};
+  const safeKey = settings.apiKey ? "********" : "SUA_API_KEY";
   return {
-    endpoint: `${state.settings.apiBaseUrl}/message/sendText/${state.settings.instance}`,
+    endpoint: `${settings.apiBaseUrl || ""}/message/sendText/${settings.instance || "{instance}"}`,
     headers: {
-      apikey: state.settings.apiKey ? "********" : "SUA_API_KEY"
+      apikey: safeKey
     },
     body: {
       number: normalizePhone(lead.phone),
