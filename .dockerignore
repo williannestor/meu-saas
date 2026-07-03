@@ -1,4 +1,11 @@
-node_modules
 .git
-.env
+node_modules
+data
 *.log
+.env
+.env.local
+.DS_Store
+coverage
+dist
+build
+tmp

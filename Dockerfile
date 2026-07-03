@@ -1,16 +1,14 @@
-FROM node:22-alpine
-
-WORKDIR /app
-
-COPY package.json ./
-RUN npm ci --omit=dev
-
-COPY server.js index.html app.js styles.css README.md ./
-COPY data ./data
-COPY workflows ./workflows
-COPY supabase ./supabase
+FROM node:20-alpine
 
 ENV NODE_ENV=production
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY server.js ./
+COPY src ./src/
+
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["npm", "start"]

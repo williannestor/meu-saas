@@ -11,7 +11,7 @@ const port = Number(process.env.PORT || 3000);
 const config = {
   appName: process.env.APP_NAME || "MEUS-ARQUIVOS",
   appUrl: process.env.APP_URL || `http://localhost:${port}`,
-  apiKey: process.env.EVOLUTION_API_KEY || process.env.API_KEY || "dev-api-key-change-me",
+  apiKey: process.env.APP_API_KEY || process.env.API_KEY || "dev-api-key-change-me",
   jwtSecret: process.env.JWT_SECRET || "dev-jwt-secret-change-me",
   adminEmail: process.env.ADMIN_EMAIL || "admin@meus-arquivos.local",
   adminPassword: process.env.ADMIN_PASSWORD || "admin123456",
@@ -28,7 +28,7 @@ const isProd = process.env.NODE_ENV === "production";
 const ALLOWED_ORIGINS = isProd
   ? [process.env.APP_URL || `http://localhost:${port}`]
   : ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"];
-const cookieSecure = isProd;
+const cookieSecure = Boolean(isProd && config.appUrl.startsWith("https://"));
 const useSupabase = Boolean(config.supabaseUrl && config.supabaseServiceRoleKey);
 
 const securityHeaders = {
@@ -107,7 +107,7 @@ function originHeaders(req) {
     "access-control-allow-origin": origin || ALLOWED_ORIGINS[0],
     "access-control-allow-credentials": "true",
     "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
-    "access-control-allow-headers": "content-type,x-api-key",
+    "access-control-allow-headers": "content-type,x-api-key,x-workspace-id",
     vary: "Origin"
   };
 }
@@ -499,38 +499,84 @@ function normalizeLead(input, existing = {}) {
   const name = input.name || input.Nome || existing.name || company;
   const tags = Array.isArray(input.tags)
     ? input.tags
-    : Array.from(new Set([input.niche || input.Nicho, input.searchTerm || input["Termo da Busca"], "prospeccao"].filter(Boolean).map(String)));
-
+    : existing.tags && Array.isArray(existing.tags)
+      ? existing.tags
+      : ["prospeccao"];
+  const messages = Array.isArray(input.messages) ? input.messages : Array.isArray(existing.messages) ? existing.messages : [];
   return {
-    id: existing.id || input.id || crypto.randomUUID(),
+    id: input.id || existing.id || crypto.randomUUID(),
     name,
     company,
     phone,
-    address: input.address || input.Endereco || input["Endereco"] || input["Endereço"] || existing.address || "",
-    website: input.website || input.Site || existing.website || "",
-    searchTerm: input.searchTerm || input["Termo da Busca"] || existing.searchTerm || "",
-    city: input.city || input["Cidade-UF"] || existing.city || "",
-    niche: input.niche || input.Nicho || existing.niche || "",
+    address: input.address || existing.address || "",
+    website: input.website || existing.website || "",
+    searchTerm: input.searchTerm || existing.searchTerm || "",
+    city: input.city || existing.city || "",
+    niche: input.niche || existing.niche || "",
     stage: input.stage || existing.stage || "Entrada",
-    value: Number(input.value || existing.value || 0),
+    value: Number(input.value ?? existing.value ?? 0),
     owner: input.owner || existing.owner || "MEUS-ARQUIVOS",
-    tags,
-    notes: input.notes || existing.notes || "Lead criado pela automacao de prospeccao.",
+    tags: [...new Set(tags)],
+    notes: input.notes || existing.notes || "",
     priority: input.priority || existing.priority || "Media",
     source: input.source || existing.source || "n8n Scraper",
     status: input.status || existing.status || "Novo",
-    sentStatus: input.sentStatus || input["Enviou?"] || existing.sentStatus || "Pendente",
+    sentStatus: input.sentStatus || existing.sentStatus || "Pendente",
     lastSeen: input.lastSeen || existing.lastSeen || "Agora",
-    messages: existing.messages || [],
-    createdAt: existing.createdAt || nowIso(),
+    whatsappOptIn: Boolean(input.whatsappOptIn ?? existing.whatsappOptIn ?? true),
+    messages: messages.map((message) => ({
+      from: message.from || "lead",
+      text: message.text || message.conversation || "",
+      time: message.time || new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    })),
+    createdAt: input.createdAt || existing.createdAt || nowIso(),
     updatedAt: nowIso()
   };
 }
 
-async function routeApi(req, res, url) {
+async function handleLeads(req, res) {
   if (req.method === "OPTIONS") {
-    const headers = originHeaders(req);
-    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
+    Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
+    return sendJson(res, 204, {});
+  }
+
+  const authorized = req.headers["x-api-key"] === config.apiKey || Boolean(verifySession(cookieValue(req, "meus_arquivos_session")));
+  if (!authorized && !req.url.startsWith("/api/webhooks/evolution")) {
+    Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
+    return sendJson(res, 401, { error: "Unauthorized" });
+  }
+
+  if (req.method === "GET" && req.url === "/api/leads") {
+    const leads = await listLeads();
+    return sendJson(res, 200, {
+      leads: leads.map((lead) => ({ ...lead, Telefone: lead.phone })),
+      settings: authorizedSettings()
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/leads/upsert") {
+    const body = await parseBody(req);
+    const lead = await upsertLead(body);
+    return sendJson(res, 200, lead);
+  }
+
+  if (req.method === "PATCH" && req.url === "/api/leads/outreach") {
+    const body = await parseBody(req);
+    const lead = await updateOutreach(body);
+    return lead ? sendJson(res, 200, lead) : sendJson(res, 404, { error: "Lead not found" });
+  }
+
+  return sendJson(res, 404, { error: "Not found" });
+}
+
+async function routeApi(req, res, url) {
+  if (url.pathname === "/healthz") {
+    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+    return res.end(JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }));
+  }
+
+  if (req.method === "OPTIONS") {
+    Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
     return sendJson(res, 204, {});
   }
 
@@ -542,50 +588,23 @@ async function routeApi(req, res, url) {
 
   const apiKeyHeader = req.headers["x-api-key"];
   const session = verifySession(cookieValue(req, "meus_arquivos_session"));
-  const authorized = Boolean(session) || apiKeyHeader === config.apiKey;
+  const authorized = apiKeyHeader === config.apiKey || Boolean(session);
 
-  if (!authorized && url.pathname !== "/api/webhooks/evolution") {
-    Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
-    return sendJson(res, 401, { error: "Unauthorized" });
+  if (authorized || req.url.startsWith("/api/webhooks/evolution")) {
+    if (req.method === "POST" && req.url === "/api/webhooks/evolution") {
+      const body = await parseBody(req);
+      const result = await handleEvolutionWebhook(body);
+      Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
+      return sendJson(res, 200, result);
+    }
+
+    if (req.url.startsWith("/api/")) {
+      return handleLeads(req, res);
+    }
   }
 
   Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
-
-  if ("GET" === req.method && url.pathname === "/api/leads") {
-    const leads = await listLeads();
-    const externalSettings = {
-      apiBaseUrl: config.evolutionApiUrl,
-      instance: config.evolutionInstance,
-      webhookUrl: `${config.appUrl}/api/webhooks/evolution`
-    };
-    return sendJson(res, 200, {
-      leads: leads.map(publicLead),
-      settings: externalSettings
-    });
-  }
-
-  if ("POST" === req.method && url.pathname === "/api/leads/upsert") {
-    return sendJson(res, 200, await upsertLead(await parseBody(req)));
-  }
-
-  if ("PATCH" === req.method && url.pathname === "/api/leads/outreach") {
-    const lead = await updateOutreach(await parseBody(req));
-    return lead ? sendJson(res, 200, lead) : sendJson(res, 404, { error: "Lead not found" });
-  }
-
-  if ("POST" === req.method && url.pathname === "/api/webhooks/evolution") {
-    return sendJson(res, 200, { ok: true, lead: await handleEvolutionWebhook(await parseBody(req)) });
-  }
-
-  if ("POST" === req.method && url.pathname === "/api/messages/send") {
-    return sendJson(res, 200, await sendWhatsApp(await parseBody(req)));
-  }
-
-  if ("POST" === req.method && url.pathname === "/api/ai/prospect-message") {
-    return sendJson(res, 200, { message: await generateProspectingMessage(await parseBody(req)) });
-  }
-
-  return sendJson(res, 404, { error: "Route not found" });
+  return sendJson(res, 404, { error: "Not found" });
 }
 
 async function serveStatic(req, res, url) {
@@ -599,10 +618,14 @@ async function serveStatic(req, res, url) {
   try {
     const body = await fs.readFile(filePath);
     res.writeHead(200, { "content-type": mimeTypes[path.extname(filePath)] || "application/octet-stream" });
-    res.end(body);
+    return res.end(body);
   } catch {
+    if (url.pathname === "/" || url.pathname === "/ai") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      return res.end("<h1>MEUS-ARQUIVOS server</h1>");
+    }
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-    res.end("Not found");
+    return res.end("Not found");
   }
 }
 
@@ -618,14 +641,22 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-ensureAdminUser()
-  .then(() => {
-    server.listen(port, () => {
-      console.log(`MEUS-ARQUIVOS rodando em http://localhost:${port}`);
-      console.log(useSupabase ? "Banco: Supabase" : "Banco: JSON local");
-    });
-  })
-  .catch((error) => {
-    console.error("Falha ao iniciar aplicacao", error);
+async function start() {
+  await ensureAdminUser();
+  await new Promise((resolve) => server.listen(port, resolve));
+  console.log(`MEUS-ARQUIVOS running on http://localhost:${port}`);
+  return server;
+}
+
+function createServer() {
+  return server;
+}
+
+if (require.main === module) {
+  start().catch((error) => {
+    console.error("Failed to start", error);
     process.exit(1);
   });
+}
+
+module.exports = { createServer, start };

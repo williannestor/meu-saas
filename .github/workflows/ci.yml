@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      PORT: 3000
+      APP_NAME: MEUS-ARQUIVOS
+      APP_URL: http://localhost:3000
+      JWT_SECRET: ci-secret
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --verbose
+      - run: node server.js &
+        timeout-minutes: 1
+      - run: curl -f http://localhost:3000/healthz
+        timeout-minutes: 1

@@ -43,7 +43,8 @@ function respond(res, status, payload, extraHeaders = {}) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     ...securityHeaders(),
-    ...extraHeaders
+    ...extraHeaders,
+    "x-log-id": global.logId || ""
   });
   res.end(JSON.stringify(payload));
 }
