@@ -9,22 +9,33 @@ const dbPath = path.join(dataDir, "crm-db.json");
 const port = Number(process.env.PORT || 3000);
 
 const config = {
-  appName: process.env.APP_NAME || "Agcapy Automacoes Inteligentes",
+  appName: process.env.APP_NAME || "MEUS-ARQUIVOS",
   appUrl: process.env.APP_URL || `http://localhost:${port}`,
-  apiKey: process.env.APP_API_KEY || "dev-api-key-change-me",
+  apiKey: process.env.EVOLUTION_API_KEY || process.env.API_KEY || "dev-api-key-change-me",
   jwtSecret: process.env.JWT_SECRET || "dev-jwt-secret-change-me",
-  adminEmail: process.env.ADMIN_EMAIL || "admin@agcapy.com.br",
+  adminEmail: process.env.ADMIN_EMAIL || "admin@meus-arquivos.local",
   adminPassword: process.env.ADMIN_PASSWORD || "admin123456",
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-  evolutionApiUrl: (process.env.EVOLUTION_API_URL || "https://evolution.agcapy.com").replace(/\/$/, ""),
-  evolutionInstance: process.env.EVOLUTION_INSTANCE || "Agcapy",
+  evolutionApiUrl: (process.env.EVOLUTION_API_URL || "https://evolution.meus-arquivos.local").replace(/\/$/, ""),
+  evolutionInstance: process.env.EVOLUTION_INSTANCE || "MEUS-ARQUIVOS",
   evolutionApiKey: process.env.EVOLUTION_API_KEY || "",
   openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
   openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini"
 };
 
+const isProd = process.env.NODE_ENV === "production";
+const ALLOWED_ORIGINS = isProd
+  ? [process.env.APP_URL || `http://localhost:${port}`]
+  : ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"];
+const cookieSecure = isProd;
 const useSupabase = Boolean(config.supabaseUrl && config.supabaseServiceRoleKey);
+
+const securityHeaders = {
+  "x-xss-protection": "1; mode=block",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer"
+};
 
 const defaultDb = {
   settings: {
@@ -58,10 +69,18 @@ function verifySession(token) {
   if (!token || !token.includes(".")) return null;
   const [body, signature] = token.split(".");
   const expected = crypto.createHmac("sha256", config.jwtSecret).update(body).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-  if (payload.exp && payload.exp < Date.now()) return null;
-  return payload;
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (payload.exp && payload.exp < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 function passwordHash(password, salt) {
@@ -74,141 +93,32 @@ function cookieValue(req, name) {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : "";
 }
 
-function isAuthorized(req) {
-  if (req.headers["x-api-key"] && req.headers["x-api-key"] === config.apiKey) return true;
-  return Boolean(verifySession(cookieValue(req, "agcapy_session")));
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  return ALLOWED_ORIGINS.includes(origin);
 }
 
-function cleanPhone(value = "") {
-  return String(value).replace(/\D/g, "");
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function toDbLead(lead) {
+function originHeaders(req) {
+  const origin = req.headers.origin || "";
+  if (!isOriginAllowed(origin)) {
+    return { "access-control-allow-origin": "", vary: "Origin" };
+  }
   return {
-    id: lead.id,
-    name: lead.name,
-    company: lead.company,
-    phone: lead.phone,
-    address: lead.address,
-    website: lead.website,
-    search_term: lead.searchTerm,
-    city: lead.city,
-    niche: lead.niche,
-    stage: lead.stage,
-    deal_value: lead.value,
-    owner: lead.owner,
-    tags: lead.tags,
-    notes: lead.notes,
-    priority: lead.priority,
-    source: lead.source,
-    status: lead.status,
-    sent_status: lead.sentStatus,
-    last_seen: lead.lastSeen,
-    messages: lead.messages,
-    created_at: lead.createdAt,
-    updated_at: lead.updatedAt
+    "access-control-allow-origin": origin || ALLOWED_ORIGINS[0],
+    "access-control-allow-credentials": "true",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
+    "access-control-allow-headers": "content-type,x-api-key",
+    vary: "Origin"
   };
 }
 
-function fromDbLead(row = {}) {
-  return {
-    id: row.id,
-    name: row.name,
-    company: row.company,
-    phone: row.phone,
-    address: row.address,
-    website: row.website,
-    searchTerm: row.search_term,
-    city: row.city,
-    niche: row.niche,
-    stage: row.stage,
-    value: row.deal_value,
-    owner: row.owner,
-    tags: row.tags || [],
-    notes: row.notes,
-    priority: row.priority,
-    source: row.source,
-    status: row.status,
-    sentStatus: row.sent_status,
-    lastSeen: row.last_seen,
-    messages: row.messages || [],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-
-function publicLead(lead) {
-  return {
-    id: lead.id,
-    name: lead.name,
-    company: lead.company,
-    phone: lead.phone,
-    Nome: lead.name,
-    Empresa: lead.company,
-    Telefone: lead.phone,
-    address: lead.address,
-    website: lead.website,
-    "Endereco": lead.address,
-    Site: lead.website,
-    searchTerm: lead.searchTerm,
-    city: lead.city,
-    niche: lead.niche,
-    "Termo da Busca": lead.searchTerm,
-    "Cidade-UF": lead.city,
-    Nicho: lead.niche,
-    stage: lead.stage,
-    value: lead.value,
-    owner: lead.owner,
-    tags: lead.tags,
-    notes: lead.notes,
-    priority: lead.priority,
-    source: lead.source,
-    status: lead.status,
-    sentStatus: lead.sentStatus,
-    "Enviou?": lead.sentStatus,
-    lastSeen: lead.lastSeen,
-    messages: lead.messages,
-    createdAt: lead.createdAt,
-    updatedAt: lead.updatedAt
-  };
-}
-
-function normalizeLead(input, existing = {}) {
-  const phone = cleanPhone(input.phone || input.Telefone || existing.phone);
-  const company = input.company || input.Empresa || existing.company || "Empresa sem cadastro";
-  const name = input.name || input.Nome || existing.name || company;
-  const tags = Array.isArray(input.tags)
-    ? input.tags
-    : Array.from(new Set([input.niche || input.Nicho, input.searchTerm || input["Termo da Busca"], "prospeccao"].filter(Boolean).map(String)));
-
-  return {
-    id: existing.id || input.id || crypto.randomUUID(),
-    name,
-    company,
-    phone,
-    address: input.address || input.Endereco || input["Endereco"] || input["Endereço"] || existing.address || "",
-    website: input.website || input.Site || existing.website || "",
-    searchTerm: input.searchTerm || input["Termo da Busca"] || existing.searchTerm || "",
-    city: input.city || input["Cidade-UF"] || existing.city || "",
-    niche: input.niche || input.Nicho || existing.niche || "",
-    stage: input.stage || existing.stage || "Entrada",
-    value: Number(input.value || existing.value || 0),
-    owner: input.owner || existing.owner || "Agcapy",
-    tags,
-    notes: input.notes || existing.notes || "Lead criado pela automacao de prospeccao.",
-    priority: input.priority || existing.priority || "Media",
-    source: input.source || existing.source || "n8n Scraper",
-    status: input.status || existing.status || "Novo",
-    sentStatus: input.sentStatus || input["Enviou?"] || existing.sentStatus || "Pendente",
-    lastSeen: input.lastSeen || existing.lastSeen || "Agora",
-    messages: existing.messages || [],
-    createdAt: existing.createdAt || nowIso(),
-    updatedAt: nowIso()
-  };
+function sendJson(res, status, payload, extraHeaders = {}) {
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    ...securityHeaders,
+    ...extraHeaders
+  });
+  res.end(JSON.stringify(payload));
 }
 
 async function parseBody(req) {
@@ -220,18 +130,6 @@ async function parseBody(req) {
   } catch {
     return {};
   }
-}
-
-function sendJson(res, status, payload, extraHeaders = {}) {
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "access-control-allow-origin": config.appUrl,
-    "access-control-allow-credentials": "true",
-    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
-    "access-control-allow-headers": "content-type,x-api-key",
-    ...extraHeaders
-  });
-  res.end(JSON.stringify(payload));
 }
 
 async function supabaseRequest(method, table, query = "", body) {
@@ -271,7 +169,7 @@ async function writeJsonDb(db) {
 }
 
 async function ensureAdminUser() {
-  const email = config.adminEmail.toLowerCase();
+  const email = "admin@meus-arquivos.local";
   if (useSupabase) {
     const users = await supabaseRequest("GET", "app_users", `?email=eq.${encodeURIComponent(email)}&select=*`);
     if (users.length) return;
@@ -298,6 +196,7 @@ async function ensureAdminUser() {
     role: "admin",
     passwordSalt: salt,
     passwordHash: passwordHash(config.adminPassword, salt),
+    workspaceId: "default",
     createdAt: nowIso()
   });
   await writeJsonDb(db);
@@ -331,6 +230,14 @@ async function listLeads() {
   }
   const db = await readJsonDb();
   return db.leads;
+}
+
+function authorizedSettings() {
+  return {
+    apiBaseUrl: config.evolutionApiUrl,
+    instance: config.evolutionInstance,
+    webhookUrl: `${config.appUrl}/api/webhooks/evolution`
+  };
 }
 
 async function upsertLead(body) {
@@ -405,7 +312,7 @@ async function handleEvolutionWebhook(body) {
   });
 
   if (!text) return lead;
-  return updateOutreach({ Telefone: lead.Telefone, status: "Respondeu", sentStatus: "Respondeu", message: text });
+  return updateOutreach({ Telefone: lead.Telefone || remoteJid, status: "Respondeu", sentStatus: "Respondeu", message: text });
 }
 
 async function sendWhatsApp(body) {
@@ -428,7 +335,7 @@ async function sendWhatsApp(body) {
 
 async function generateProspectingMessage(lead) {
   if (!config.openRouterApiKey) {
-    return "Ola, tudo bem? Aqui e o Lynq, assistente virtual da AgCapy Automacoes Inteligentes. Vi o contato de voces no Google Maps. Hoje voces estao satisfeitos com o volume de clientes atendidos?";
+    return "Ola, tudo bem? Aqui e o MEUS-ARQUIVOS, assistente virtual da plataforma MEUS-ARQUIVOS. Vi o contato de voces no Google Maps. Hoje voces estao satisfeitos com o volume de clientes atendidos?";
   }
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -444,8 +351,7 @@ async function generateProspectingMessage(lead) {
       messages: [
         {
           role: "system",
-          content:
-            "Voce e o Lynq, assistente de prospeccao consultiva da Agcapy. Escreva mensagens curtas, humanas, sem vender, sem preco e com uma pergunta por vez."
+          content: "Voce e o assistente de prospeccao consultiva do MEUS-ARQUIVOS. Escreva mensagens curtas, humanas, sem vender, sem preco e com uma pergunta por vez."
         },
         {
           role: "user",
@@ -459,13 +365,13 @@ async function generateProspectingMessage(lead) {
   return payload.choices?.[0]?.message?.content || "";
 }
 
-async function handleAuth(req, res, url) {
-  if (req.method === "GET" && url.pathname === "/api/session") {
-    const session = verifySession(cookieValue(req, "agcapy_session"));
+async function handleAuth(req, res) {
+  if (req.method === "GET" && req.url === "/api/session") {
+    const session = verifySession(cookieValue(req, "meus_arquivos_session"));
     return sendJson(res, 200, { authenticated: Boolean(session), user: session?.user || null });
   }
 
-  if (req.method === "POST" && url.pathname === "/api/login") {
+  if (req.method === "POST" && req.url === "/api/login") {
     const body = await parseBody(req);
     const user = await findUserByEmail(body.email);
     if (!user || passwordHash(body.password || "", user.passwordSalt) !== user.passwordHash) {
@@ -473,58 +379,209 @@ async function handleAuth(req, res, url) {
     }
     const sessionUser = { id: user.id, email: user.email, name: user.name, role: user.role };
     const token = signSession({ user: sessionUser, exp: Date.now() + 1000 * 60 * 60 * 12 });
+    const cookie = `meus_arquivos_session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200${cookieSecure ? "; Secure" : ""}`;
     return sendJson(res, 200, { authenticated: true, user: sessionUser }, {
-      "set-cookie": `agcapy_session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`
+      "set-cookie": cookie
     });
   }
 
-  if (req.method === "POST" && url.pathname === "/api/logout") {
+  if (req.method === "POST" && req.url === "/api/logout") {
+    const cookie = `meus_arquivos_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${cookieSecure ? "; Secure" : ""}`;
     return sendJson(res, 200, { ok: true }, {
-      "set-cookie": "agcapy_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0"
+      "set-cookie": cookie
     });
   }
 
   return null;
 }
 
-async function routeApi(req, res, url) {
-  if (req.method === "OPTIONS") return sendJson(res, 204, {});
-  const authResponse = await handleAuth(req, res, url);
-  if (authResponse) return authResponse;
+function toDbLead(lead) {
+  return {
+    id: lead.id,
+    name: lead.name,
+    company: lead.company,
+    phone: lead.phone,
+    address: lead.address,
+    website: lead.website,
+    search_term: lead.searchTerm,
+    city: lead.city,
+    niche: lead.niche,
+    stage: lead.stage,
+    deal_value: lead.value,
+    owner: lead.owner,
+    tags: lead.tags,
+    notes: lead.notes,
+    priority: lead.priority,
+    source: lead.source,
+    status: lead.status,
+    sent_status: lead.sentStatus,
+    last_seen: lead.lastSeen,
+    messages: lead.messages,
+    created_at: lead.createdAt,
+    updated_at: lead.updatedAt
+  };
+}
 
-  if (url.pathname !== "/api/webhooks/evolution" && !isAuthorized(req)) {
+function fromDbLead(row = {}) {
+  return {
+    id: row.id,
+    name: row.name,
+    company: row.company,
+    phone: row.phone,
+    address: row.address,
+    website: row.website,
+    searchTerm: row.search_term,
+    city: row.city,
+    niche: row.niche,
+    stage: row.stage,
+    value: row.deal_value,
+    owner: row.owner,
+    tags: row.tags || [],
+    notes: row.notes,
+    priority: row.priority,
+    source: row.source,
+    status: row.status,
+    sentStatus: row.sent_status,
+    lastSeen: row.last_seen,
+    messages: row.messages || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function publicLead(lead) {
+  return {
+    id: lead.id,
+    name: lead.name,
+    company: lead.company,
+    phone: lead.phone,
+    Nome: lead.name,
+    Empresa: lead.company,
+    Telefone: lead.phone,
+    address: lead.address,
+    website: lead.website,
+    Endereco: lead.address,
+    Site: lead.website,
+    searchTerm: lead.searchTerm,
+    city: lead.city,
+    niche: lead.niche,
+    "Termo da Busca": lead.searchTerm,
+    "Cidade-UF": lead.city,
+    Nicho: lead.niche,
+    stage: lead.stage,
+    value: lead.value,
+    owner: lead.owner,
+    tags: lead.tags,
+    notes: lead.notes,
+    priority: lead.priority,
+    source: lead.source,
+    status: lead.status,
+    sentStatus: lead.sentStatus,
+    "Enviou?": lead.sentStatus,
+    lastSeen: lead.lastSeen,
+    messages: lead.messages,
+    createdAt: lead.createdAt,
+    updatedAt: lead.updatedAt
+  };
+}
+
+function cleanPhone(value = "") {
+  return String(value).replace(/\D/g, "");
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function normalizeLead(input, existing = {}) {
+  const phone = cleanPhone(input.phone || input.Telefone || existing.phone);
+  const company = input.company || input.Empresa || existing.company || "Empresa sem cadastro";
+  const name = input.name || input.Nome || existing.name || company;
+  const tags = Array.isArray(input.tags)
+    ? input.tags
+    : Array.from(new Set([input.niche || input.Nicho, input.searchTerm || input["Termo da Busca"], "prospeccao"].filter(Boolean).map(String)));
+
+  return {
+    id: existing.id || input.id || crypto.randomUUID(),
+    name,
+    company,
+    phone,
+    address: input.address || input.Endereco || input["Endereco"] || input["Endereço"] || existing.address || "",
+    website: input.website || input.Site || existing.website || "",
+    searchTerm: input.searchTerm || input["Termo da Busca"] || existing.searchTerm || "",
+    city: input.city || input["Cidade-UF"] || existing.city || "",
+    niche: input.niche || input.Nicho || existing.niche || "",
+    stage: input.stage || existing.stage || "Entrada",
+    value: Number(input.value || existing.value || 0),
+    owner: input.owner || existing.owner || "MEUS-ARQUIVOS",
+    tags,
+    notes: input.notes || existing.notes || "Lead criado pela automacao de prospeccao.",
+    priority: input.priority || existing.priority || "Media",
+    source: input.source || existing.source || "n8n Scraper",
+    status: input.status || existing.status || "Novo",
+    sentStatus: input.sentStatus || input["Enviou?"] || existing.sentStatus || "Pendente",
+    lastSeen: input.lastSeen || existing.lastSeen || "Agora",
+    messages: existing.messages || [],
+    createdAt: existing.createdAt || nowIso(),
+    updatedAt: nowIso()
+  };
+}
+
+async function routeApi(req, res, url) {
+  if (req.method === "OPTIONS") {
+    const headers = originHeaders(req);
+    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
+    return sendJson(res, 204, {});
+  }
+
+  const authResponse = await handleAuth(req, res);
+  if (authResponse) {
+    Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
+    return authResponse;
+  }
+
+  const apiKeyHeader = req.headers["x-api-key"];
+  const session = verifySession(cookieValue(req, "meus_arquivos_session"));
+  const authorized = Boolean(session) || apiKeyHeader === config.apiKey;
+
+  if (!authorized && url.pathname !== "/api/webhooks/evolution") {
+    Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
     return sendJson(res, 401, { error: "Unauthorized" });
   }
 
-  if (req.method === "GET" && url.pathname === "/api/leads") {
+  Object.entries(originHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
+
+  if ("GET" === req.method && url.pathname === "/api/leads") {
+    const leads = await listLeads();
+    const externalSettings = {
+      apiBaseUrl: config.evolutionApiUrl,
+      instance: config.evolutionInstance,
+      webhookUrl: `${config.appUrl}/api/webhooks/evolution`
+    };
     return sendJson(res, 200, {
-      leads: (await listLeads()).map(publicLead),
-      settings: {
-        apiBaseUrl: config.evolutionApiUrl,
-        instance: config.evolutionInstance,
-        webhookUrl: `${config.appUrl}/api/webhooks/evolution`
-      }
+      leads: leads.map(publicLead),
+      settings: externalSettings
     });
   }
 
-  if (req.method === "POST" && url.pathname === "/api/leads/upsert") {
+  if ("POST" === req.method && url.pathname === "/api/leads/upsert") {
     return sendJson(res, 200, await upsertLead(await parseBody(req)));
   }
 
-  if (req.method === "PATCH" && url.pathname === "/api/leads/outreach") {
+  if ("PATCH" === req.method && url.pathname === "/api/leads/outreach") {
     const lead = await updateOutreach(await parseBody(req));
     return lead ? sendJson(res, 200, lead) : sendJson(res, 404, { error: "Lead not found" });
   }
 
-  if (req.method === "POST" && url.pathname === "/api/webhooks/evolution") {
+  if ("POST" === req.method && url.pathname === "/api/webhooks/evolution") {
     return sendJson(res, 200, { ok: true, lead: await handleEvolutionWebhook(await parseBody(req)) });
   }
 
-  if (req.method === "POST" && url.pathname === "/api/messages/send") {
+  if ("POST" === req.method && url.pathname === "/api/messages/send") {
     return sendJson(res, 200, await sendWhatsApp(await parseBody(req)));
   }
 
-  if (req.method === "POST" && url.pathname === "/api/ai/prospect-message") {
+  if ("POST" === req.method && url.pathname === "/api/ai/prospect-message") {
     return sendJson(res, 200, { message: await generateProspectingMessage(await parseBody(req)) });
   }
 
@@ -535,7 +592,7 @@ async function serveStatic(req, res, url) {
   const requested = url.pathname === "/" || url.pathname === "/ai" || url.pathname === "/ai/" ? "/index.html" : url.pathname.replace(/^\/ai\//, "/");
   const filePath = path.normalize(path.join(root, requested));
   if (!filePath.startsWith(root)) {
-    res.writeHead(403);
+    res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
     return res.end("Forbidden");
   }
 
@@ -555,6 +612,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) return await routeApi(req, res, url);
     return await serveStatic(req, res, url);
   } catch (error) {
+    const headers = originHeaders({ headers: { origin: req.headers.origin } });
+    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
     sendJson(res, 500, { error: error.message });
   }
 });
@@ -562,7 +621,7 @@ const server = http.createServer(async (req, res) => {
 ensureAdminUser()
   .then(() => {
     server.listen(port, () => {
-      console.log(`${config.appName} rodando em http://localhost:${port}`);
+      console.log(`MEUS-ARQUIVOS rodando em http://localhost:${port}`);
       console.log(useSupabase ? "Banco: Supabase" : "Banco: JSON local");
     });
   })
